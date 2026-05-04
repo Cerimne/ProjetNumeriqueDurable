@@ -30,7 +30,7 @@
   .panel { display: none; }
   .panel-active { display: block; }
 
-  /* Info panel */
+  /* Info */
   .form-block { background: #fff; border: 1px solid #dde1e7; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
   .form-block-title { font-size: 14px; font-weight: 600; margin-bottom: 14px; }
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -44,9 +44,8 @@
   .danger-title { font-size: 13px; font-weight: 600; color: #c0392b; margin-bottom: 6px; }
   .danger-desc { font-size: 12px; color: #888; margin-bottom: 12px; line-height: 1.5; }
 
-  /* Offers panel */
+  /* Offres */
   .offer-row { display: flex; align-items: center; gap: 12px; background: #fff; border: 1px solid #dde1e7; border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; }
-  .offer-img { width: 56px; height: 48px; background: #e4e8ed; border-radius: 6px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 10px; }
   .offer-info { flex: 1; }
   .offer-title { font-size: 13px; font-weight: 500; }
   .offer-meta { font-size: 11px; color: #888; margin-top: 2px; }
@@ -63,10 +62,10 @@
 <body>
 
 <nav class="nav">
-  <span class="nav-logo">RecycloMarché </span>
+  <span class="nav-logo" style="cursor:pointer" onclick="window.location='01_accueil.html'">RecycloMarché </span>
   <div class="nav-links">
-    <button class="btn">← Accueil</button>
-    <button class="btn">Se déconnecter</button>
+    <button class="btn" onclick="window.location='01_accueil.html'">← Accueil</button>
+    <button class="btn" onclick="seDeconnecter()">Se déconnecter</button>
   </div>
 </nav>
 
@@ -143,12 +142,13 @@
     <div id="mes-offres-container">
       <p style="color:#888;font-size:13px;">Chargement de vos offres&hellip;</p>
     </div>
-    <div class="new-offer">+ Publier une nouvelle offre</div>
+    <div class="new-offer" onclick="publierNouvelleOffre()">+ Publier une nouvelle offre</div>
   </div>
 
 </div>
  
 
+<script src="../backend/api/api.js"></script>
 <script>
   function showTab(name) {
     document.getElementById('panel-info').classList.remove('panel-active');
@@ -157,13 +157,38 @@
     document.getElementById('panel-' + name).classList.add('panel-active');
     event.target.classList.add('tab-active');
   }
+  function getVendorData(){
+    console.log("test");
+    fetch('api/utilisateurs.php?id=' + encodeURIComponent(vendeurId))
+            .then(r => r.json())
+            .then(data => {
+              if (!data) return;
+              const v = data;
+              document.querySelector('input[type=text]').value = v.prenom;
+              document.querySelectorAll('input[type=text]')[1].value = v.nom;
+              document.querySelector('input[type=email]').value = v.email;
+              document.querySelectorAll('input[type=text]')[2].value = v.postal_code || '';
+              document.querySelector(".profile-name").innerHTML=v.prenom+" "+v.nom;
+              document.querySelector(".profile-sub").innerHTML="Membre depuis "+(new Date(v.created_at)).toLocaleDateString('fr-FR', { year: 'numeric', month: 'short' })+(v.postal_code ? " · "+v.postal_code : "");
+            })
+            .catch(() => alert('Erreur de connexion au serveur.'));
+  }
+  const vendeurId = new URLSearchParams(window.location.search).get('vendeur_id')
+    || (getSession() ? getSession().id : null);
 
-  const vendeurId = new URLSearchParams(window.location.search).get('vendeur_id');
-
+  function publierNouvelleOffre() {
+    const user = getSession();
+    if (!user) { window.location = 'Connexions_Inscriptions.html'; return; }
+    window.location = 'Offre_Form.html?vendeur_id=' + user.id;
+  }
+  function modifierOffre(id) {
+    const user = getSession();
+    if (!user) { window.location = 'Connexions_Inscriptions.html'; return; }
+    window.location = 'Offre_Form.html?vendeur_id=' + user.id+"&id="+id;
+  }
   if (vendeurId) {
-    fetch('api/offres.php?vendeur_id=' + encodeURIComponent(vendeurId))
-      .then(r => r.json())
-      .then(offres => {
+    getVendorData();
+    getOffresByVendeur(vendeurId).then(offres => {
         const container = document.getElementById('mes-offres-container');
         const tabOffres = document.querySelector('.tab[onclick*="offers"]');
         if (tabOffres) tabOffres.textContent = 'Mes offres (' + offres.length + ')';
@@ -174,21 +199,17 @@
         }
         container.innerHTML = offres.map(o => `
           <div class="offer-row">
-            <div class="offer-img">[photo]</div>
             <div class="offer-info">
               <div class="offer-title">${o.title}</div>
               <div class="offer-meta">${o.price} &euro; &middot; ${o.categorie || ''} &middot; <span class="status-active">Active</span></div>
             </div>
             <div class="offer-actions">
-              <button class="btn btn-sm">Modifier</button>
+              <button class="btn btn-sm" onclick='modifierOffre(${o.id})'>Modifier</button>
               <button class="btn-danger-sm">Supprimer</button>
             </div>
           </div>`).join('');
       })
-      .catch(() => {
-        document.getElementById('mes-offres-container').innerHTML =
-          '<p style="color:#c00;font-size:13px;">Impossible de charger vos offres.</p>';
-      });
+
   } else {
     document.getElementById('mes-offres-container').innerHTML =
       '<p style="color:#888;font-size:13px;">Aucun identifiant vendeur fourni dans l\'URL (vendeur_id=X).</p>';

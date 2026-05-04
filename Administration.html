@@ -121,7 +121,15 @@
 
 </div>
 
+<script src="../backend/api/api.js"></script>
 <script>
+  // Vérification admin
+  const adminUser = getSession();
+  if (adminUser) {
+    document.querySelector('.nav-right span').textContent =
+      (adminUser.prenom || '') + ' ' + (adminUser.nom || '') + ' · Admin';
+  }
+
   let tousLesComptes = [];
   let toutesLesOffres = [];
 
@@ -133,28 +141,46 @@
     btn.classList.add('tab-active');
   }
 
+  // Bouton déconnexion
+  document.querySelector('.btn-light').onclick = () => {
+    setSession(null);
+    window.location = '01_accueil.html';
+  };
+
+  // Boutons "+ Créer" 
+  document.querySelectorAll('.toolbar .btn-primary')[0].onclick = () =>
+    alert('Création de compte : à connecter au backend (POST api/vendeurs.php).');
+  document.querySelectorAll('.toolbar .btn-primary')[1].onclick = () =>
+    window.location = 'Offre_Form.html';
+
   function ligneCompte(v) {
-    return `<tr>
+    return `<tr id="compte-row-${v.id}">
       <td>${v.prenom || '—'}</td>
       <td>${v.nom || '—'}</td>
       <td>${v.postal_code || '—'}</td>
       <td><span class="status-active">${v.role || 'vendeur'}</span></td>
       <td><div class="action-cell">
-        <button class="btn btn-sm">Modifier</button>
-        <button class="btn-danger-sm">Supprimer</button>
+        <button class="btn btn-sm"
+          onclick="window.location='Gestion_compte.html?vendeur_id=${v.id}'">
+          Voir compte
+        </button>
+        <button class="btn-danger-sm" onclick="supprimerCompte(${v.id})">Supprimer</button>
       </div></td>
     </tr>`;
   }
 
   function ligneOffre(o) {
-    return `<tr>
+    return `<tr id="offre-row-${o.id}">
       <td>${o.title}</td>
       <td>${o.prenom || ''} ${o.nom ? o.nom[0] + '.' : ''}</td>
       <td>${o.categorie || '—'}</td>
       <td>${o.price} &euro;</td>
       <td><div class="action-cell">
-        <button class="btn btn-sm">Modifier</button>
-        <button class="btn-danger-sm">Supprimer</button>
+        <button class="btn btn-sm"
+          onclick="window.location='Offre_Form.html?id=${o.id}'">
+          Modifier
+        </button>
+        <button class="btn-danger-sm" onclick="supprimerOffre(${o.id})">Supprimer</button>
       </div></td>
     </tr>`;
   }
@@ -162,53 +188,72 @@
   function filtrerComptes() {
     const q = document.getElementById('search-accounts').value.toLowerCase();
     const resultats = tousLesComptes.filter(v =>
-      (v.nom || '').toLowerCase().includes(q) ||
-      (v.prenom || '').toLowerCase().includes(q) ||
-      (v.postal_code || '').toLowerCase().includes(q)
+      (v.nom||'').toLowerCase().includes(q) ||
+      (v.prenom||'').toLowerCase().includes(q) ||
+      (v.postal_code||'').toLowerCase().includes(q)
     );
     document.getElementById('tbody-accounts').innerHTML =
       resultats.length ? resultats.map(ligneCompte).join('') :
-      '<tr><td colspan="5" style="color:#888;text-align:center;">Aucun r&eacute;sultat.</td></tr>';
+      '<tr><td colspan="5" style="color:#888;text-align:center;">Aucun résultat.</td></tr>';
   }
 
   function filtrerOffres() {
     const q = document.getElementById('search-offers').value.toLowerCase();
     const resultats = toutesLesOffres.filter(o =>
-      (o.title || '').toLowerCase().includes(q) ||
-      (o.categorie || '').toLowerCase().includes(q)
+      (o.title||'').toLowerCase().includes(q) ||
+      (o.categorie||'').toLowerCase().includes(q)
     );
     document.getElementById('tbody-offers').innerHTML =
       resultats.length ? resultats.map(ligneOffre).join('') :
-      '<tr><td colspan="5" style="color:#888;text-align:center;">Aucun r&eacute;sultat.</td></tr>';
+      '<tr><td colspan="5" style="color:#888;text-align:center;">Aucun résultat.</td></tr>';
   }
 
-  fetch('api/vendeurs.php')
-    .then(r => r.json())
-    .then(vendeurs => {
-      tousLesComptes = vendeurs;
-      document.getElementById('stat-vendeurs').textContent = vendeurs.length;
-      document.getElementById('tbody-accounts').innerHTML =
-        vendeurs.length ? vendeurs.map(ligneCompte).join('') :
+  function supprimerCompte(id) {
+    if (!confirm('Supprimer ce compte et toutes ses offres ?')) return;
+    deleteUser(id).then(() => {
+      tousLesComptes = tousLesComptes.filter(v => v.id !== id);
+      toutesLesOffres = toutesLesOffres.filter(o => o.vendeur_id !== id);
+      document.getElementById('stat-vendeurs').textContent = tousLesComptes.filter(v => v.role === 'vendeur').length;
+      document.getElementById('stat-offres').textContent = toutesLesOffres.length;
+      document.getElementById('tbody-accounts').innerHTML = tousLesComptes.map(ligneCompte).join('') ||
         '<tr><td colspan="5" style="color:#888;text-align:center;">Aucun compte.</td></tr>';
-    })
-    .catch(() => {
-      document.getElementById('tbody-accounts').innerHTML =
-        '<tr><td colspan="5" style="color:#c00;text-align:center;">Impossible de charger les comptes.</td></tr>';
-    });
-
-  fetch('api/offres.php')
-    .then(r => r.json())
-    .then(offres => {
-      toutesLesOffres = offres;
-      document.getElementById('stat-offres').textContent = offres.length;
-      document.getElementById('tbody-offers').innerHTML =
-        offres.length ? offres.map(ligneOffre).join('') :
+      document.getElementById('tbody-offers').innerHTML = toutesLesOffres.map(ligneOffre).join('') ||
         '<tr><td colspan="5" style="color:#888;text-align:center;">Aucune offre.</td></tr>';
-    })
-    .catch(() => {
-      document.getElementById('tbody-offers').innerHTML =
-        '<tr><td colspan="5" style="color:#c00;text-align:center;">Impossible de charger les offres.</td></tr>';
     });
+  }
+
+  function supprimerOffre(id) {
+    if (!confirm('Supprimer définitivement cette offre ?')) return;
+    deleteOffre(id).then(() => {
+      toutesLesOffres = toutesLesOffres.filter(o => o.id !== id);
+      document.getElementById('stat-offres').textContent = toutesLesOffres.length;
+      document.getElementById('tbody-offers').innerHTML = toutesLesOffres.map(ligneOffre).join('') ||
+        '<tr><td colspan="5" style="color:#888;text-align:center;">Aucune offre.</td></tr>';
+    });
+  }
+
+  // Chargement
+  Promise.all([
+    getAllUsers(),
+    getOffres()
+  ]).then(([users, offres]) => {
+    tousLesComptes  = users.filter(u => u.role !== 'admin');
+    toutesLesOffres = offres;
+
+    document.getElementById('stat-vendeurs').textContent =
+      tousLesComptes.filter(v => v.role === 'vendeur').length;
+    document.getElementById('stat-offres').textContent = offres.length;
+
+    document.getElementById('tbody-accounts').innerHTML =
+      tousLesComptes.length ? tousLesComptes.map(ligneCompte).join('') :
+      '<tr><td colspan="5" style="color:#888;text-align:center;">Aucun compte.</td></tr>';
+    document.getElementById('tbody-offers').innerHTML =
+      offres.length ? offres.map(ligneOffre).join('') :
+      '<tr><td colspan="5" style="color:#888;text-align:center;">Aucune offre.</td></tr>';
+  }).catch(() => {
+    document.getElementById('tbody-accounts').innerHTML =
+      '<tr><td colspan="5" style="color:#c00;text-align:center;">Erreur de chargement.</td></tr>';
+  });
 </script>
 
 </body>
