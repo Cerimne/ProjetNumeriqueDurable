@@ -243,7 +243,7 @@
     document.getElementById('stat-vendeurs').textContent =
       tousLesComptes.filter(v => v.role === 'vendeur').length;
     document.getElementById('stat-offres').textContent = offres.length;
-
+ 
     document.getElementById('tbody-accounts').innerHTML =
       tousLesComptes.length ? tousLesComptes.map(ligneCompte).join('') :
       '<tr><td colspan="5" style="color:#888;text-align:center;">Aucun compte.</td></tr>';
